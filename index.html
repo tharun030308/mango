@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PassItOn: from your surplus to someone's essential</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
+<style>
+  /* Stitch design tokens (light) as RGB channels so Tailwind opacity modifiers work */
+  :root{
+    color-scheme:light;
+    --surface:248 252 225; --card:255 255 255; --low:242 246 220; --mid:236 240 214; --high:231 235 209; --highest:225 229 203;
+    --ink:25 29 13; --sub:81 68 56; --line:131 116 103;
+    --primary:132 84 20; --onprimary:255 255 255; --pfix:255 220 187; --onpfix:44 23 0;
+    --sec:99 96 50; --onsec:255 255 255; --sfix:234 229 170; --onsfix:30 28 0;
+    --ter:170 52 52; --onter:255 255 255; --tfix:255 218 215; --ontfix:65 0 5;
+    --errc:255 218 214; --onerrc:147 0 10; --inv:46 50 33; --oninv:239 243 217;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      color-scheme:dark;
+      --surface:24 27 15; --card:33 37 23; --low:39 43 28; --mid:46 50 35; --high:55 59 43; --highest:65 69 52;
+      --ink:226 230 205; --sub:214 195 179; --line:155 143 128;
+      --primary:251 186 114; --onprimary:70 41 0; --pfix:103 61 0; --onpfix:255 220 187;
+      --sec:205 201 144; --onsec:50 48 0; --sfix:75 72 28; --onsfix:234 229 170;
+      --ter:255 179 174; --onter:105 0 12; --tfix:137 28 31; --ontfix:255 218 215;
+      --errc:147 0 10; --onerrc:255 218 214; --inv:226 230 205; --oninv:46 50 33;
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --surface:24 2
+    7 15; --card:33 37 23; --low:39 43 28; --mid:46 50 35; --high:55 59 43; --highest:65 69 52;
+    --ink:226 230 205; --sub:214 195 179; --line:155 143 128;
+    --primary:251 186 114; --onprimary:70 41 0; --pfix:103 61 0; --onpfix:255 220 187;
+    --sec:205 201 144; --onsec:50 48 0; --sfix:75 72 28; --onsfix:234 229 170;
+    --ter:255 179 174; --onter:105 0 12; --tfix:137 28 31; --ontfix:255 218 215;
+    --errc:147 0 10; --onerrc:255 218 214; --inv:226 230 205; --oninv:46 50 33;
+  }
+  html{-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:rgb(var(--high));color:rgb(var(--ink));font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif}
+  .material-symbols-outlined{font-family:'Material Symbols Outlined';font-weight:400;font-style:normal;line-height:1;letter-spacing:normal;text-transform:none;display:inline-block;white-space:nowrap;-webkit-font-smoothing:antialiased;font-size:24px}
+  .lbl{font-size:11px;font-weight:800;letter-spacing:.04em;color:rgb(var(--sub));display:block;margin-bottom:6px}
+  ::-webkit-scrollbar{display:none}
+  button:focus-visible,select:focus-visible,input:focus-visible,label:focus-within{outline:2px solid rgb(var(--primary));outline-offset:2px}
+  @media (prefers-reduced-motion: reduce){.animate-ping,.animate-pulse{animation:none!important}}
+</style>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  const rgb = n => `rgb(var(--${n}) / <alpha-value>)`;
+  tailwind.config = { theme: { extend: {
+    colors: Object.fromEntries(['surface','card','low','mid','high','highest','ink','sub','line','primary','onprimary','pfix','onpfix','sec','onsec','sfix','onsfix','ter','onter','tfix','ontfix','errc','onerrc','inv','oninv'].map(n=>[n,rgb(n)])),
+    fontFamily: { sans: ['Plus Jakarta Sans','system-ui','sans-serif'] }
+  } } };
+</script>
+</head>
+<body class="font-sans antialiased">
+<div id="app" class="mx-auto w-full max-w-[430px] min-h-[100dvh] flex flex-col bg-surface relative sm:shadow-xl">
+  <header id="hdr" class="sticky top-0 z-40 bg-surface/95 backdrop-blur border-b border-line/10"></header>
+  <main id="screen" class="flex-1 px-4 pt-4 pb-8"></main>
+  <div id="bar" class="sticky bottom-0 z-40"></div>
+  <div class="fixed inset-x-0 bottom-24 z-50 flex justify-center pointer-events-none px-4">
+    <div id="toast" role="status" aria-live="polite" class="opacity-0 translate-y-4 transition duration-300 bg-inv text-oninv rounded-2xl shadow-xl px-4 py-3 text-sm font-semibold max-w-[380px] flex items-center gap-2.5">
+      <span class="material-symbols-outlined text-[20px]">task_alt</span><span class="msg"></span>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* ============ helpers ============ */
+const $ = s => document.querySelector(s);
+const MIN = 60000, HR = 3600000, now = () => Date.now(), pad = n => String(n).padStart(2, '0');
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const tm = t => new Date(t).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+const hhmm = t => { const d = new Date(t); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+const timeToMs = v => { const [h, m] = v.split(':').map(Number); const d = new Date(); d.setHours(h, m, 0, 0); if (d.getTime() > now()) d.setDate(d.getDate() - 1); return d.getTime(); };
+const fmtCd = ms => { if (ms <= 0) return 'Expired'; const s = Math.floor(ms/1000), h = Math.floor(s/3600), m = Math.floor(s%3600/60); return h > 0 ? `${h}h ${pad(m)}m` : `${m}m ${pad(s%60)}s`; };
+const fmtShort = ms => { if (ms <= 0) return '0m'; const s = Math.floor(ms/1000), h = Math.floor(s/3600), m = Math.floor(s%3600/60); return h > 0 ? `${h}h${pad(m)}` : (m > 0 ? `${m}m` : `${s}s`); };
+const ic = (n, c = '', f = false) => `<span class="material-symbols-outlined ${c}"${f ? ` style="font-variation-settings:'FILL' 1"` : ''}>${n}</span>`;
+const card = 'bg-card rounded-2xl p-4 shadow-sm border border-line/10';
+
+/* ============ data ============ */
+const CATS = {
+  food:   {label:'Cooked food', icon:'ramen_dining', unit:'meals', blurb:'Surplus meals, catering batches, bakery items', urgent:true},
+  clothes:{label:'Clothes', icon:'apparel', unit:'items', blurb:'Clean shirts, jackets, winter wear'},
+  shoes:  {label:'Shoes', icon:'footprint', unit:'pairs', blurb:'School shoes, sneakers, sandals'},
+  books:  {label:'Books & stationery', icon:'menu_book', unit:'items', blurb:'Textbooks, storybooks, notebooks'},
+  other:  {label:'Other essentials', icon:'inventory_2', unit:'items', blurb:'Groceries, blankets, hygiene kits'}
+};
+/* Assumption: safe hours after cooking. Placeholder values, validate against food-safety guidance before a real pilot. */
+const FOODS = {'Biryani & rice':4, 'Dal, curry & gravies':3, 'Bakery & bread':8, 'Sweets & dry snacks':12};
+const ICON_F = {'Biryani & rice':'rice_bowl', 'Dal, curry & gravies':'dinner_dining', 'Bakery & bread':'bakery_dining', 'Sweets & dry snacks':'cookie'};
+const DONORS = {biz:{name:'Aarav Caterers', area:'Andheri West', icon:'storefront', label:'Business'}, fam:{name:"Meera's Family", area:'Lokhandwala', icon:'home', label:'Family'}};
+const SKILLS = {driving:['Driving / two-wheeler','two_wheeler'], cooking:['Food prep & cooking','restaurant'], packing:['Inventory & packing','inventory_2'], lifting:['Heavy lifting','fitness_center'], teaching:['Teaching / mentoring','school'], firstaid:['First aid certified','medical_services']};
+const CAUSES = {food:['Food rescue & distribution','rice_bowl'], env:['Environment','eco'], child:['Child welfare & education','child_care'], elderly:['Elderly care','elderly'], emergency:['Emergency relief','emergency']};
+const DAYS = ['M','T','W','T','F','S','S'];
+const NGOS = [
+  {id:'asha', name:'Asha Shelter', area:'Andheri East', km:1.4, kind:'Night shelter & community dining', icon:'night_shelter', cap:100,
+   about:'A 60-bed night shelter with an evening community kitchen for daily-wage workers, seniors and youth. Runs on surplus food and volunteer couriers.',
+   stats:[['120','meals served nightly'],['34','active volunteers'],['4.9★','volunteer rating']],
+   skills:['driving','cooking','packing'], causes:['food'], avail:['1-5','1-6'], child:false,
+   slots:[{id:'a1',label:'Saturday, 6:30–8:30 PM',role:'Hot-meal courier run',need:1,urgent:true},{id:'a2',label:'Sunday, 6:30–8:30 PM',role:'Hot-meal courier run',need:2},{id:'a3',label:'Next Saturday, 6:30–8:30 PM',role:'Dinner serving & kitchen handover',need:3}]},
+  {id:'hope', name:'Hope Learning Centre', area:'Jogeshwari West', km:2.6, kind:'After-school learning centre', icon:'school', accepts:['shoes','books','clothes'],
+   about:'Free after-school classes for 120+ children. Volunteers sort donated books, school kits and footwear before each term.',
+   stats:[['120','children enrolled'],['18','active volunteers'],['4.8★','volunteer rating']],
+   skills:['packing','teaching','lifting'], causes:['child'], avail:['0-5','0-6'], child:true,
+   slots:[{id:'h1',label:'Saturday, 9:00 AM–12:00 PM',role:'Kit sorting & packing',need:4},{id:'h2',label:'Sunday, 9:00 AM–12:00 PM',role:'Footwear fitting & handover',need:2}]},
+  {id:'sun', name:'Sunrise Roti Bank', area:'Versova', km:3.8, kind:'Community kitchen & bread distribution', icon:'bakery_dining', accepts:['food'],
+   about:'Sunday-morning bread and meal distribution to coastal settlements, fed by bakeries and caterers.',
+   stats:[['300','meals every Sunday'],['22','active volunteers'],['4.7★','volunteer rating']],
+   skills:['cooking','packing','driving'], causes:['food'], avail:['0-6','1-5'], child:false,
+   slots:[{id:'s1',label:'Sunday, 6:00–9:00 AM',role:'Cooking assistance',need:3},{id:'s2',label:'Saturday, 6:00–8:00 PM',role:'Bread pickup run',need:1}]},
+  {id:'green', name:'GreenLine Cleanup Collective', area:'Versova Beach', km:4.6, kind:'Neighbourhood cleanup & recycling', icon:'eco', accepts:['clothes','other'],
+   about:'Weekend beach and drain cleanups plus a recycling drop point. Needs hands and vehicles to haul collected waste.',
+   stats:[['1.2 t','waste hauled monthly'],['40','active volunteers'],['4.6★','volunteer rating']],
+   skills:['lifting','driving'], causes:['env'], avail:['0-5','0-6'], child:false,
+   slots:[{id:'g1',label:'Saturday, 7:00–10:00 AM',role:'Cleanup crew',need:8},{id:'g2',label:'Sunday, 7:00–10:00 AM',role:'Hauling & drop-off',need:2}]},
+  {id:'silver', name:'Silver Years Care', area:'Bandra West', km:7.5, kind:'Day-care for seniors', icon:'elderly', accepts:['clothes','other','food'],
+   about:'A day-care centre for seniors who live alone. Volunteers keep company, help with meals and log basic health checks.',
+   stats:[['45','seniors served'],['12','active volunteers'],['4.9★','volunteer rating']],
+   skills:['firstaid','teaching','packing'], causes:['elderly','emergency'], avail:['0-0','0-1','0-2','0-3','0-4','1-5'], child:false,
+   slots:[{id:'v1',label:'Weekdays, 9:00 AM–12:00 PM',role:'Companionship & meal help',need:3}]}
+];
+const NGO = id => NGOS.find(n => n.id === id);
+const ASHA_BASE_USED = 20;
+
+function seed() {
+  const t = now();
+  const food = (id, donor, area, km, ftype, qty, title, desc, agoMin) => ({id, cat:'food', donor, area, km, ftype, qty, unit:'meals', title, desc, cookedAt:t-agoMin*MIN, safeUntil:t-agoMin*MIN+FOODS[ftype]*HR, status:'posted', created:t-25*MIN});
+  const item = (id, cat, donor, area, km, qty, title, desc, cond, pickup) => ({id, cat, donor, area, km, qty, unit:CATS[cat].unit, title, desc, cond, pickup, status:'posted', created:t-3*HR});
+  return [
+    food('d1','Aarav Caterers','Andheri West',1.8,'Biryani & rice',40,'40 biryani meal boxes','Veg and non-veg packed separately in insulated foil boxes.',132),
+    food('d2','Spice Route Banquet','Andheri West',0.9,'Dal, curry & gravies',25,'25 dal & rice pouches','Hot sealed pouches, curbside ready.',152),
+    food('d3','Artisan Bakers Bandra','Bandra West',2.4,'Bakery & bread',35,'35 loaves and buns','Sourdough, sandwich loaves and dinner rolls, individually bagged.',345),
+    item('d4','shoes',"Meera's Family",'Lokhandwala',3.1,3,'3 pairs of school shoes','Black polished lace-ups, sizes 5–7. Sanitized and boxed.','Good','By Sunday'),
+    item('d5','books','St. Jude Alumni Group','Khar',4.0,45,'45 science workbooks','Grade 6–8 workbooks, ready in 2 carry boxes.','Good','By Tuesday'),
+    {id:'d0', cat:'food', donor:'Aarav Caterers', area:'Andheri West', km:1.8, ftype:'Biryani & rice', qty:30, unit:'meals', title:'30 veg pulao meals', desc:'Delivered last night.', cookedAt:t-26*HR, safeUntil:t-22*HR, status:'received', created:t-26*HR, claimedAt:t-25.5*HR, pickedAt:t-25*HR, receivedAt:t-24.6*HR, ngo:'Asha Shelter', method:'volunteer', vol:'Ravi K.'}
+  ];
+}
+
+let S;
+function init() {
+  S = {role:'donor', screen:'give', p:{}, hist:[], persona:'biz', donations:seed(), nextId:10, form:null, claimEnd:0, feedTab:'urgent',
+    needs:{meals:50, diet:'Veg + Halal', urgent:true, accepts:{food:true, shoes:true, books:true, clothes:false, other:false}, sizes:[5,6,7]},
+    vol:{skills:new Set(['driving','cooking','packing']), causes:new Set(['food','env']), avail:new Set(['0-5','0-6','1-5','1-6']), radius:5},
+    sort:'match', offers:{}, slotSel:{}, declined:new Set(), proof:{},
+    impact:{given:2140, hot:1680, ngos:38, week:[180,220,240,310,390,460,340]}};
+}
+const find = id => S.donations.find(d => d.id === id);
+const accepts = (n, cat) => n.id === 'asha' ? !!S.needs.accepts[cat] : n.accepts.includes(cat);
+const usedCap = () => ASHA_BASE_USED + S.donations.filter(d => d.cat === 'food' && d.ngo === 'Asha Shelter' && d.claimedAt > now() - 12*HR).reduce((a, d) => a + d.qty, 0);
+const dIcon = d => d.cat === 'food' ? ICON_F[d.ftype] : CATS[d.cat].icon;
+
+/* ============ small components ============ */
+const ST = {posted:['Waiting for an NGO','bg-sfix text-onsfix'], claimed:['Claimed','bg-pfix text-onpfix'], pickup:['In transit','bg-pfix text-onpfix'], received:['Received','bg-primary text-onprimary']};
+const pill = s => `<span class="text-[11px] font-bold px-2 py-0.5 rounded-full ${ST[s][1]}">${ST[s][0]}</span>`;
+const chip = (on, label, click, icon) => `<button type="button" onclick="${click}" aria-pressed="${on}" class="px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 ${on ? 'bg-primary text-onprimary' : 'bg-low text-ink hover:bg-mid'}">${icon ? ic(icon, 'text-[16px]') : ''}${label}${on ? ic('check', 'text-[14px]') : ''}</button>`;
+const ring = (until, total, size = 56) => `<div class="rg relative shrink-0" data-until="${until}" data-total="${total}" style="width:${size}px;height:${size}px"><svg viewBox="0 0 36 36" class="w-full h-full -rotate-90"><circle cx="18" cy="18" r="15" fill="none" stroke-width="3.5" class="stroke-high"/><circle class="arc stroke-primary" cx="18" cy="18" r="15" fill="none" stroke-width="3.5" stroke-linecap="round" pathLength="100" stroke-dasharray="100 100"/></svg><div class="rgt absolute inset-0 flex items-center justify-center text-[10px] font-extrabold"></div></div>`;
+const matchRing = pct => `<div class="relative shrink-0 w-14 h-14"><svg viewBox="0 0 36 36" class="w-full h-full -rotate-90"><circle cx="18" cy="18" r="15" fill="none" stroke-width="3.5" class="stroke-high"/><circle cx="18" cy="18" r="15" fill="none" stroke-width="3.5" stroke-linecap="round" pathLength="100" stroke-dasharray="${pct} 100" class="${pct >= 80 ? 'stroke-primary' : pct >= 55 ? 'stroke-sec' : 'stroke-line'}"/></svg><div class="absolute inset-0 flex items-center justify-center text-[13px] font-extrabold">${pct}<span class="text-[9px]">%</span></div></div>`;
+const stepper = (id, val, unit, dec, inc) => `<div class="flex items-center justify-between bg-low rounded-2xl p-3"><button type="button" aria-label="Decrease" onclick="${dec}" class="w-12 h-12 rounded-xl bg-card shadow-sm flex items-center justify-center active:scale-95">${ic('remove')}</button><div class="text-center"><div id="${id}" class="text-[34px] leading-none font-extrabold text-primary tracking-tight">${val}</div><div class="text-[11px] font-bold text-sub mt-1">${unit}</div></div><button type="button" aria-label="Increase" onclick="${inc}" class="w-12 h-12 rounded-xl bg-card shadow-sm flex items-center justify-center active:scale-95">${ic('add')}</button></div>`;
+const backRow = (title, right = '') => `<div class="flex items-center justify-between -mt-1 mb-1"><div class="flex items-center gap-1"><button type="button" aria-label="Back" onclick="A.back()" class="w-10 h-10 -ml-2 rounded-full flex items-center justify-center hover:bg-high">${ic('arrow_back')}</button><h2 class="font-bold text-lg">${title}</h2></div>${right}</div>`;
+const empty = (icon, title, body, action = '') => `<div class="${card} text-center py-8 space-y-2"><div class="w-14 h-14 mx-auto rounded-full bg-pfix text-primary flex items-center justify-center">${ic(icon, 'text-[28px]')}</div><div class="font-bold">${title}</div><p class="text-sm text-sub max-w-[260px] mx-auto">${body}</p>${action}</div>`;
+const proofBox = id => `<div class="flex items-center gap-3">${S.proof[id] ? `<img alt="Proof photo" src="${S.proof[id]}" class="w-16 h-16 rounded-xl object-cover">` : ''}<label class="flex-1 h-12 rounded-xl bg-low text-primary font-bold text-sm flex items-center justify-center gap-2 cursor-pointer">${ic('photo_camera', 'text-[20px]')}${S.proof[id] ? 'Retake proof photo' : 'Add proof photo (recommended)'}<input type="file" accept="image/*" capture="environment" class="hidden" onchange="A.proof('${id}',this)"></label></div>`;
+const btn = (label, click, style = 'p', extra = '') => `<button type="button" onclick="${click}" class="w-full h-[52px] rounded-xl font-bold text-[15px] flex items-center justify-center gap-2 active:scale-[.98] transition ${style === 'p' ? 'bg-primary text-onprimary shadow-md' : style === 's' ? 'bg-low text-ink hover:bg-mid' : 'bg-ter text-onter shadow-md'} ${extra}">${label}</button>`;
+
+/* ============ header & bar ============ */
+function renderHeader() {
+  const roles = [['donor','Donor'],['ngo','NGO'],['volunteer','Volunteer']];
+  $('#hdr').innerHTML = `
+  <button type="button" onclick="A.tab('impact')" class="w-full flex items-center justify-between gap-2 px-4 py-1.5 bg-low text-[11px] font-bold text-sub">
+    <span class="flex items-center gap-2 min-w-0"><span class="relative flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-60"></span><span class="relative inline-flex h-2 w-2 rounded-full bg-primary"></span></span><span class="truncate">${S.impact.given.toLocaleString()} items and meals given · ${S.impact.ngos} active NGOs</span></span>
+    <span class="text-primary flex items-center shrink-0">See impact${ic('chevron_right', 'text-[14px]')}</span></button>
+  <div class="px-4 pt-2.5 pb-2 flex items-center gap-2.5">
+    <div class="w-9 h-9 rounded-xl bg-primary text-onprimary flex items-center justify-center">${ic('volunteer_activism', 'text-[20px]', true)}</div>
+    <div class="leading-tight"><div class="font-extrabold text-[17px] tracking-tight">PassItOn</div><div class="text-[11px] font-semibold text-sub">From your surplus to someone's essential</div></div>
+  </div>
+  <div class="px-4 pb-2.5"><div class="grid grid-cols-3 bg-high p-1 rounded-full">${roles.map(([k, l]) => `<button type="button" onclick="A.setRole('${k}')" aria-pressed="${S.role === k}" class="py-1.5 rounded-full text-xs font-bold flex items-center justify-center gap-1 transition ${S.role === k ? 'bg-card text-primary shadow-sm' : 'text-sub'}">${l}${k === 'volunteer' ? '<span class="text-[9px] px-1 py-px rounded-full bg-sfix text-onsfix font-extrabold">BETA</span>' : ''}</button>`).join('')}</div></div>`;
+}
+const NAV = {
+  donor:[['give','add_circle','Give'],['activity','local_shipping','Activity'],['impact','insights','Impact']],
+  ngo:[['feed','inbox','Feed'],['active','task_alt','Active'],['needs','checklist','Needs'],['impact','insights','Impact']],
+  volunteer:[['dispatch','two_wheeler','Dispatch'],['matches','handshake','Matches'],['profile','tune','Profile'],['impact','insights','Impact']]
+};
+const NAVMAP = {dtl:'activity', ngod:'matches'};
+const cta = inner => `<div class="bg-surface/95 backdrop-blur border-t border-line/10 px-4 pt-3 pb-4 space-y-2">${inner}</div>`;
+function badgeFor(k) {
+  if (S.role === 'ngo' && k === 'feed') return S.donations.filter(d => d.status === 'posted' && S.needs.accepts[d.cat] && (d.cat !== 'food' || d.safeUntil > now())).length;
+  if (S.role === 'ngo' && k === 'active') return S.donations.filter(d => d.ngo === 'Asha Shelter' && d.status !== 'received').length;
+  if (S.role === 'volunteer' && k === 'dispatch') return S.donations.filter(d => d.status === 'claimed' && d.method === 'volunteer' && !S.declined.has(d.id)).length;
+  return 0;
+}
+function renderBar() {
+  const s = S.screen; let h = '';
+  if (s === 'form') {
+    const f = S.form, bad = f.cat === 'food' && f.cookedAt + FOODS[f.ftype]*HR <= now();
+    h = cta(`<button type="button" onclick="A.post()" ${bad ? 'disabled' : ''} class="w-full h-[52px] rounded-xl font-bold text-[15px] flex items-center justify-center gap-2 ${bad ? 'bg-high text-sub' : 'bg-primary text-onprimary shadow-md active:scale-[.98]'}">${bad ? 'Past safe window: cannot post' : (f.cat === 'food' ? 'Post food for urgent match' : 'Post donation')}${bad ? '' : ic('arrow_forward', 'text-[20px]')}</button><p class="text-center text-xs text-sub">NGOs that accept ${CATS[f.cat].label.toLowerCase()} are notified instantly</p>`);
+  } else if (s === 'claim') {
+    const d = find(S.p.id), food = d && d.cat === 'food';
+    h = cta(`${btn(`${ic('local_shipping', 'text-[20px]')}Confirm claim${food ? ' (<span class="ct">10:00</span>)' : ''}`, 'A.confirmClaim()')}<button type="button" onclick="A.release()" class="w-full text-center text-sm font-bold text-ter py-1">Release to the next shelter</button>`);
+  } else if (s === 'ngod') {
+    const n = NGO(S.p.id), sid = S.slotSel[n.id] || n.slots[0].id, sl = n.slots.find(x => x.id === sid), on = S.offers[n.id];
+    h = cta(`${btn(on ? `${ic('check_circle', 'text-[20px]')}Offer sent · tap to withdraw` : `Offer to help · ${sl.label.split(',')[0]}`, `A.offer('${n.id}')`, on ? 's' : 'p')}<p class="text-center text-xs text-sub">No lock-in. You can withdraw any time.</p>`);
+  } else {
+    const cur = NAVMAP[s] || s;
+    h = `<nav class="bg-surface/95 backdrop-blur border-t border-line/10 pb-[env(safe-area-inset-bottom)]"><div class="flex justify-around items-center h-16">${NAV[S.role].map(([k, i, l]) => { const b = badgeFor(k); return `<button type="button" onclick="A.tab('${k}')" aria-label="${l}" ${cur === k ? 'aria-current="page"' : ''} class="flex flex-col items-center justify-center w-16 h-14 gap-0.5 transition ${cur === k ? 'text-primary font-bold' : 'text-sub'}"><span class="relative">${ic(i, 'text-[24px]', cur === k)}${b ? `<span class="absolute -top-1 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-ter text-onter text-[10px] font-extrabold flex items-center justify-center">${b}</span>` : ''}</span><span class="text-[11px]">${l}</span></button>`; }).join('')}</div></nav>`;
+  }
+  $('#bar').innerHTML = h;
+}
+
+/* ============ views ============ */
+const V = {};
+
+/* ---- donor ---- */
+V.give = () => {
+  const N = S.needs;
+  const radar = [
+    N.accepts.food && {ngo:'Asha Shelter', cat:'food', text:`Needs ${N.meals}+ cooked dinner meals tonight`, km:1.4, urgent:N.urgent},
+    N.accepts.shoes && N.sizes.length && {ngo:'Asha Shelter', cat:'shoes', text:`School shoes, sizes ${N.sizes.join(', ')}`, km:1.4},
+    {ngo:'Hope Learning Centre', cat:'books', text:'Books and stationery for 120+ children', km:2.6},
+    {ngo:'Silver Years Care', cat:'clothes', text:'Warm blankets and winter clothes', km:7.5}
+  ].filter(Boolean);
+  const tile = (k, c, hero) => `<button type="button" onclick="A.openForm('${k}')" class="${hero ? 'col-span-2 flex items-center gap-4' : ''} text-left ${card} hover:bg-low active:scale-[.98] transition">
+    <div class="w-12 h-12 rounded-xl ${hero ? 'bg-primary text-onprimary' : 'bg-high text-primary'} flex items-center justify-center shrink-0">${ic(c.icon, 'text-[26px]', hero)}</div>
+    <div class="${hero ? '' : 'mt-3'} min-w-0"><div class="font-bold flex items-center gap-2">${c.label}${hero ? '<span class="text-[10px] px-1.5 py-0.5 rounded-full bg-tfix text-ontfix font-extrabold">Time-sensitive</span>' : ''}</div><div class="text-xs text-sub mt-0.5">${c.blurb}</div></div></button>`;
+  return `<div class="space-y-5">
+    <div><span class="lbl">I'm giving as</span><div class="grid grid-cols-2 gap-1 bg-high p-1 rounded-2xl">${Object.entries(DONORS).map(([k, d]) => `<button type="button" onclick="A.persona('${k}')" aria-pressed="${S.persona === k}" class="py-2 rounded-xl flex flex-col items-center leading-tight transition ${S.persona === k ? 'bg-card text-primary shadow-sm' : 'text-sub'}"><span class="text-sm font-bold flex items-center gap-1.5">${ic(d.icon, 'text-[18px]')}${d.label}</span><span class="text-[11px] font-medium">${d.name}</span></button>`).join('')}</div></div>
+    <div><h1 class="text-[24px] leading-8 font-extrabold tracking-tight">What are you giving today?</h1><p class="text-sm text-sub mt-1">From one pair of shoes to 80 hot meals. Pick a category and we route it to NGOs that asked for it.</p></div>
+    <div class="grid grid-cols-2 gap-3">${Object.entries(CATS).map(([k, c]) => tile(k, c, k === 'food')).join('')}</div>
+    <section class="${card} space-y-3"><div class="flex items-center justify-between"><h3 class="font-bold flex items-center gap-2">${ic('radar', 'text-primary')}What NGOs near you need</h3><span class="text-[11px] font-bold text-sub">Live</span></div>
+      ${radar.map(r => `<div class="flex items-center justify-between gap-3 bg-low rounded-xl p-3"><div class="min-w-0"><div class="font-bold text-sm flex items-center gap-1.5 flex-wrap">${r.ngo}${r.urgent ? '<span class="text-[10px] px-1.5 py-0.5 rounded-full bg-ter text-onter font-extrabold">Urgent</span>' : ''}</div><div class="text-xs text-sub mt-0.5">${r.text} · ${r.km} km</div></div><button type="button" onclick="A.openForm('${r.cat}')" class="h-9 px-3 rounded-lg bg-card text-primary text-xs font-bold shadow-sm shrink-0">Fulfill</button></div>`).join('')}
+    </section></div>`;
+};
+
+function safeInner(f) {
+  const win = FOODS[f.ftype]*HR, until = f.cookedAt + win, bad = until - now() <= 0;
+  return `<div class="rounded-2xl p-4 flex items-center justify-between gap-3 ${bad ? 'bg-errc text-onerrc' : 'bg-sfix text-onsfix'}">
+    <div class="flex items-start gap-3">${ic(bad ? 'warning' : 'shield', 'text-[26px] mt-0.5', true)}<div><div class="font-extrabold text-[17px] leading-tight">${bad ? 'Past its safe window' : 'Safe until ' + tm(until)}</div><div class="text-xs font-medium mt-0.5">${bad ? 'Please do not donate this batch.' : '<span class="cd" data-until="' + until + '"></span> left to hand over'}</div></div></div>${ring(until, win, 52)}</div>`;
+}
+V.form = () => {
+  const f = S.form, c = CATS[f.cat], food = f.cat === 'food', P = DONORS[S.persona];
+  const detail = food ? `
+    <div><label class="lbl" for="ft">Food type</label><select id="ft" onchange="A.ftype(this.value)" class="w-full bg-low text-ink rounded-xl px-3 py-3 font-semibold text-sm">${Object.keys(FOODS).map(k => `<option ${f.ftype === k ? 'selected' : ''}>${k}</option>`).join('')}</select><p class="text-[11px] text-sub mt-1.5">Safe windows are placeholder assumptions until validated with food-safety guidance.</p></div>
+    <div><label class="lbl" for="ct">Cooked or prepared at</label><input id="ct" type="time" value="${hhmm(f.cookedAt)}" oninput="A.cooked(this.value)" class="w-full bg-low text-ink rounded-xl px-3 py-3 font-semibold text-sm"></div>` : `
+    <div><span class="lbl">Condition</span><div class="flex flex-wrap gap-2">${[['New','New with tags'],['Good','Good'],['Worn','Gently used']].map(([v, l]) => chip(f.cond === v, l, `A.set('cond','${v}')`)).join('')}</div></div>
+    <div><span class="lbl">Pickup window</span><div class="flex flex-wrap gap-2">${['Today', 'By Sunday', 'Flexible'].map(v => chip(f.pickup === v, v, `A.set('pickup','${v}')`)).join('')}</div></div>`;
+  return `<div class="space-y-4">${backRow('Post a donation')}
+    <div class="${card} flex items-center justify-between"><div class="flex items-center gap-3"><div class="w-11 h-11 rounded-xl bg-pfix text-primary flex items-center justify-center">${ic(c.icon, 'text-[24px]', true)}</div><div><div class="text-[11px] font-bold text-sub">Category</div><div class="font-bold text-[17px]">${c.label}</div></div></div><span class="text-[11px] font-bold px-2 py-1 rounded-full ${food ? 'bg-tfix text-ontfix' : 'bg-high text-sub'}">${food ? 'Urgent match' : 'Scheduled pickup'}</span></div>
+    ${food ? `<div id="safeBox">${safeInner(f)}</div>` : ''}
+    <div class="${card} space-y-3"><div class="flex items-center justify-between"><h3 class="font-bold">${food ? 'Number of meals' : 'Quantity (' + c.unit + ')'}</h3></div>${stepper('q', f.qty, c.unit, `A.qty(${food ? -5 : -1})`, `A.qty(${food ? 5 : 1})`)}
+      ${food ? `<div class="flex items-center gap-2"><span class="text-[11px] font-bold text-sub">Quick add</span>${[10, 25, 50].map(n => `<button type="button" onclick="A.qty(${n})" class="px-3 py-1.5 rounded-lg bg-low text-xs font-bold hover:bg-pfix active:scale-95">+${n}</button>`).join('')}</div>` : ''}</div>
+    <div class="${card} space-y-4">${detail}
+      <div><label class="lbl" for="ds">${food ? 'Notes for the NGO (optional)' : 'What are you giving?'}</label><input id="ds" type="text" value="${esc(f.desc)}" oninput="A.desc(this.value)" placeholder="${food ? 'e.g. Veg and non-veg packed separately' : f.cat === 'shoes' ? 'e.g. Black school shoes, sizes 5–7' : 'e.g. 3 winter jackets, adult M/L'}" class="w-full bg-low text-ink rounded-xl px-3 py-3 text-sm placeholder:text-sub/70"></div></div>
+    <div class="${card}"><div class="flex items-center justify-between mb-2"><h3 class="font-bold">Photo</h3><span class="text-[11px] font-bold text-sub">Optional, helps NGOs claim faster</span></div><div class="flex gap-2 items-center">${f.photo ? `<img alt="Your donation" src="${f.photo}" class="w-20 h-20 rounded-xl object-cover">` : ''}<label class="w-20 h-20 rounded-xl bg-low flex flex-col items-center justify-center text-primary cursor-pointer text-[11px] font-bold gap-0.5">${ic('photo_camera', 'text-[24px]')}${f.photo ? 'Retake' : 'Add photo'}<input type="file" accept="image/*" capture="environment" class="hidden" onchange="A.photo(this)"></label></div></div>
+    <div class="${card} flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-high flex items-center justify-center text-sub shrink-0">${ic(P.icon)}</div><div class="min-w-0"><div class="text-[11px] font-bold text-sub">Pickup point</div><div class="font-bold truncate">${P.name}</div><div class="text-xs text-sub">${P.area} · doorstep handover</div></div></div>
+  </div>`;
+};
+
+function stepRow(state, n, title, time, body, last) {
+  const dot = state === 'done' ? `<div class="w-8 h-8 rounded-full bg-primary text-onprimary flex items-center justify-center z-10">${ic('check', 'text-[18px]')}</div>`
+    : state === 'active' ? `<div class="relative z-10"><div class="w-8 h-8 rounded-full bg-primary text-onprimary flex items-center justify-center font-bold text-sm">${n}</div><span class="absolute -inset-1 rounded-full bg-primary/25 animate-ping"></span></div>`
+    : `<div class="w-8 h-8 rounded-full bg-high text-sub flex items-center justify-center font-bold text-sm z-10">${n}</div>`;
+  return `<div class="relative flex gap-3">${last ? '' : `<div class="absolute left-4 -ml-px top-8 -bottom-1 w-0.5 ${state === 'done' ? 'bg-primary' : 'bg-line/30'}"></div>`}${dot}<div class="flex-1 pb-5 ${state === 'todo' ? 'opacity-70' : ''}"><div class="flex items-center justify-between gap-2"><span class="font-bold text-[15px]">${title}</span><span class="text-[11px] font-semibold text-sub">${time || ''}</span></div><div class="text-sm text-sub mt-0.5 space-y-2">${body}</div></div></div>`;
+}
+V.dtl = () => {
+  const d = find(S.p.id); if (!d) return empty('search_off', 'Donation not found', 'Go back to your activity list.');
+  const st = d.status, order = ['posted', 'claimed', 'pickup', 'received'], idx = order.indexOf(st);
+  const state = i => i < idx ? 'done' : i === idx ? 'active' : 'todo';
+  const mLabel = {volunteer:'a volunteer courier (beta)', collect:'the NGO team', drop:'you'}[d.method];
+  const notified = NGOS.filter(n => accepts(n, d.cat)).length;
+  const s1 = stepRow('done', 1, 'Posted and matched', tm(d.created), `Broadcast to ${notified} NGOs that accept ${CATS[d.cat].label.toLowerCase()}.`);
+  const s2 = stepRow(idx >= 1 ? 'done' : 'active', 2, d.ngo ? `Claimed by ${d.ngo}` : 'Waiting for an NGO to claim', d.claimedAt ? tm(d.claimedAt) : '', d.ngo ? `Pickup will be done by ${mLabel}.` : (d.cat === 'food' ? 'Switch to the NGO role to claim it and see the loop close.' : 'Scheduled goods can wait for a flexible pickup.'));
+  const vol = d.vol ? `<div class="bg-low rounded-xl p-3 flex items-center gap-3"><div class="w-10 h-10 rounded-full bg-pfix text-primary flex items-center justify-center font-bold">RK</div><div><div class="font-bold text-ink text-sm">${d.vol} <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-pfix text-onpfix font-extrabold">Demo volunteer</span></div><div class="text-xs">ETA about ${Math.round(d.km*7+10)} min (estimate)</div></div></div>` : '';
+  const s3 = stepRow(idx >= 3 ? 'done' : idx === 2 ? 'active' : 'todo', 3, 'Pickup arranged and in transit', d.pickedAt ? tm(d.pickedAt) : '', (idx >= 1 ? `Handled by ${mLabel}.` : 'Starts once an NGO claims.') + vol);
+  const s4 = stepRow(idx >= 3 ? 'done' : 'todo', 4, 'Received and handed over', d.receivedAt ? tm(d.receivedAt) : '', d.proof ? `<img alt="Proof of handover" src="${d.proof}" class="w-full h-40 object-cover rounded-xl">` : (idx >= 3 ? 'Handover confirmed.' : 'A proof photo appears here when the NGO confirms receipt.'), true);
+  return `<div class="space-y-4">${backRow('Donation status')}
+    <section class="${card} space-y-3"><div class="flex items-center justify-between gap-2"><span class="text-[11px] font-bold text-sub">${d.donor} · #PIO-${d.id.replace('d', '')}</span>${pill(st)}</div>
+      <div class="flex items-start gap-3"><div class="w-11 h-11 rounded-xl bg-pfix text-primary flex items-center justify-center shrink-0">${ic(dIcon(d), 'text-[24px]')}</div><div><h2 class="font-extrabold text-[19px] leading-6">${esc(d.title)}</h2><p class="text-sm text-sub mt-0.5">${esc(d.desc || '')}</p></div></div>
+      ${d.cat === 'food' && st !== 'received' ? `<div class="flex items-center gap-3 bg-sfix text-onsfix rounded-xl p-3">${ring(d.safeUntil, FOODS[d.ftype]*HR, 48)}<div class="text-sm font-bold">Safe until ${tm(d.safeUntil)}<div class="text-xs font-medium"><span class="cd" data-until="${d.safeUntil}"></span> left</div></div></div>` : ''}
+    </section>
+    <section class="${card}"><h3 class="font-bold mb-4">Progress</h3>${s1}${s2}${s3}${s4}</section></div>`;
+};
+V.activity = () => {
+  const P = DONORS[S.persona], mine = S.donations.filter(d => d.donor === P.name).sort((a, b) => b.created - a.created);
+  return `<div class="space-y-4"><div><h1 class="text-[22px] font-extrabold tracking-tight">Your donations</h1><p class="text-sm text-sub">Giving as ${P.name}</p></div>
+    ${mine.length ? mine.map(d => `<button type="button" onclick="A.open('${d.id}')" class="w-full text-left ${card} flex items-center gap-3 hover:bg-low"><div class="w-11 h-11 rounded-xl bg-pfix text-primary flex items-center justify-center shrink-0">${ic(dIcon(d), 'text-[24px]')}</div><div class="flex-1 min-w-0"><div class="font-bold truncate">${esc(d.title)}</div><div class="text-xs text-sub mt-0.5">${d.ngo ? 'To ' + d.ngo : 'Posted ' + tm(d.created)}</div></div>${pill(d.status)}</button>`).join('') : empty('volunteer_activism', 'Nothing posted yet', 'Give something today and follow it from pickup to handover here.', `<div class="pt-2">${btn('Give something', "A.tab('give')")}</div>`)}</div>`;
+};
+
+/* ---- NGO ---- */
+function foodCard(d) {
+  const win = FOODS[d.ftype]*HR, left = d.safeUntil - now(), free = 100 - usedCap(), over = d.qty > free, crit = left < 15*MIN;
+  return `<article class="${card} space-y-3 ${crit ? 'ring-1 ring-ter/50' : ''}">
+    <div class="flex items-start justify-between gap-3"><div class="flex items-center gap-3 min-w-0"><div class="w-11 h-11 rounded-xl ${crit ? 'bg-tfix text-ter' : 'bg-high text-primary'} flex items-center justify-center shrink-0">${ic(dIcon(d), 'text-[24px]')}</div><div class="min-w-0"><div class="font-bold flex items-center gap-1 truncate">${esc(d.donor)}${ic('verified', 'text-primary text-[16px]', true)}</div><div class="text-xs text-sub">${d.km} km · ${d.area}</div></div></div><div class="text-center">${ring(d.safeUntil, win)}<div class="text-[10px] font-bold text-sub mt-0.5">till ${tm(d.safeUntil)}</div></div></div>
+    <div class="bg-low rounded-xl p-3 flex items-center justify-between gap-3"><div class="min-w-0"><div class="text-[11px] font-bold ${crit ? 'text-ter' : 'text-sec'}">${crit ? 'Critical window' : d.ftype}</div><div class="font-bold text-[16px] leading-5">${esc(d.title)}</div><div class="text-xs text-sub mt-0.5">${esc(d.desc || '')}</div></div><div class="text-center shrink-0"><div class="text-[30px] leading-none font-extrabold ${crit ? 'text-ter' : 'text-primary'}">${d.qty}</div><div class="text-[11px] font-bold text-sub">meals</div></div></div>
+    ${S.needs.meals ? `<div class="flex items-center gap-2 text-xs font-semibold bg-sfix text-onsfix rounded-lg px-3 py-2">${ic('hub', 'text-[18px]')}Matches your need: ${S.needs.meals}+ dinner meals${S.needs.urgent ? ' tonight' : ''}</div>` : ''}
+    ${over ? `<button type="button" disabled class="w-full h-[52px] rounded-xl bg-high text-sub font-bold text-sm">Over tonight's capacity (${free} left)</button>` : btn(`${ic(crit ? 'alarm' : 'check_circle', 'text-[20px]')}${crit ? 'Claim now · ' + fmtShort(left) + ' left' : 'Claim for Asha Shelter'}`, `A.openClaim('${d.id}')`, crit ? 'd' : 'p')}</article>`;
+}
+function itemCard(d) {
+  return `<article class="${card} space-y-3"><div class="flex items-center justify-between"><span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-sfix text-onsfix">${CATS[d.cat].label}</span><span class="text-xs font-bold text-sub flex items-center gap-1">${ic('calendar_today', 'text-[15px]')}Pickup ${d.pickup.toLowerCase()}</span></div>
+    <div class="flex items-start gap-3"><div class="w-11 h-11 rounded-xl bg-high text-primary flex items-center justify-center shrink-0">${ic(dIcon(d), 'text-[24px]')}</div><div class="min-w-0"><div class="font-bold text-[16px] leading-5">${esc(d.title)}</div><div class="text-xs text-sub mt-0.5">${esc(d.donor)} · ${d.km} km · ${d.area}</div></div></div>
+    <p class="text-sm text-sub bg-low rounded-xl p-3">${esc(d.desc || '')}</p>
+    <div class="flex flex-wrap gap-1.5"><span class="text-[11px] font-bold px-2 py-1 rounded-lg bg-low">${d.cond === 'New' ? 'New with tags' : d.cond === 'Worn' ? 'Gently used' : 'Good condition'}</span><span class="text-[11px] font-bold px-2 py-1 rounded-lg bg-low">${d.qty} ${d.unit}</span></div>
+    ${btn(`${ic('archive', 'text-[20px]')}Claim for Asha Shelter`, `A.openClaim('${d.id}')`)}</article>`;
+}
+V.feed = () => {
+  const N = S.needs, list = S.donations.filter(d => d.status === 'posted' && N.accepts[d.cat] && (d.cat !== 'food' || d.safeUntil > now()));
+  const urgent = list.filter(d => d.cat === 'food').sort((a, b) => a.safeUntil - b.safeUntil), sched = list.filter(d => d.cat !== 'food');
+  const cur = S.feedTab === 'urgent' ? urgent : sched, used = usedCap();
+  return `<div class="space-y-4">
+    <div class="${card} flex items-center gap-3"><div class="w-11 h-11 rounded-xl bg-primary text-onprimary flex items-center justify-center">${ic('night_shelter', 'text-[24px]', true)}</div><div class="flex-1"><div class="font-bold">Asha Shelter · tonight's meals</div><div class="h-2 bg-high rounded-full mt-1.5 overflow-hidden"><div class="h-full bg-primary rounded-full" style="width:${Math.min(100, used)}%"></div></div><div class="text-xs text-sub mt-1">${used} of 100 claimed · <b class="text-primary">${100 - used} open</b></div></div></div>
+    <div class="grid grid-cols-2 gap-1 bg-high p-1 rounded-2xl">${[['urgent', 'Urgent food', urgent.length, 'timer'], ['sched', 'Scheduled goods', sched.length, 'inventory_2']].map(([k, l, n, i]) => `<button type="button" onclick="A.feedTab('${k}')" aria-pressed="${S.feedTab === k}" class="py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 transition ${S.feedTab === k ? 'bg-card text-primary shadow-sm' : 'text-sub'}">${ic(i, 'text-[18px]')}${l}<span class="text-[11px] px-1.5 rounded-full ${S.feedTab === k ? 'bg-ter text-onter' : 'bg-mid'}">${n}</span></button>`).join('')}</div>
+    ${cur.length ? cur.map(d => d.cat === 'food' ? foodCard(d) : itemCard(d)).join('') : empty(S.feedTab === 'urgent' ? 'check_circle' : 'inventory_2', S.feedTab === 'urgent' ? (N.accepts.food ? 'All nearby food is claimed' : 'Food intake is switched off') : 'No scheduled goods right now', S.feedTab === 'urgent' ? (N.accepts.food ? 'New surplus appears here the moment a donor posts it. Switch to the Donor role and post one.' : 'Turn on Cooked food in the Needs tab to see it.') : 'Only categories you accept are shown. Change them in the Needs tab.')}
+  </div>`;
+};
+V.claim = () => {
+  const d = find(S.p.id); if (!d) return '';
+  const food = d.cat === 'food', used = usedCap(), m = S.p.method;
+  const opts = [['volunteer', 'Volunteer dispatch (beta)', 'Nearby volunteers get a one-tap ping. Free for both sides.', 'two_wheeler', food ? 'Recommended for hot food' : ''], ['collect', "We'll collect", 'Your van or staff picks up from the donor. Contact details unlock on confirm.', 'local_shipping', ''], ['drop', 'Donor drops off', 'The donor brings it to your gate. Depends on donor availability.', 'home_pin', '']];
+  return `<div class="space-y-4">${backRow('Claim and pickup')}
+    ${food ? `<div class="rounded-2xl bg-sfix text-onsfix px-4 py-3 flex items-center justify-between">${'<span class="flex items-center gap-2 text-sm font-bold">' + ic('timer', 'text-[20px] animate-pulse') + 'Reserved for you</span>'}<span class="ct font-extrabold text-[18px]">10:00</span></div>` : ''}
+    <section class="${card} space-y-3"><div class="flex items-center justify-between"><div class="flex items-center gap-2 font-bold">${esc(d.donor)}${ic('verified', 'text-primary text-[16px]', true)}</div><span class="text-xs text-sub">${d.km} km</span></div>
+      <div class="bg-low rounded-xl p-3 flex items-center justify-between"><div><div class="font-bold">${esc(d.title)}</div><div class="text-xs text-sub mt-0.5">${food ? 'Safe until ' + tm(d.safeUntil) : 'Pickup ' + d.pickup.toLowerCase()}</div></div><div class="text-[28px] font-extrabold text-primary leading-none">${d.qty}</div></div></section>
+    <section class="${card} space-y-2"><div class="flex items-center justify-between"><h3 class="font-bold">${food ? 'Capacity check' : 'Storage check'}</h3><span class="text-[11px] font-bold px-2 py-0.5 rounded-full ${!food || used + d.qty <= 100 ? 'bg-pfix text-onpfix' : 'bg-errc text-onerrc'}">${!food || used + d.qty <= 100 ? 'Approved' : 'Over capacity'}</span></div>
+      ${food ? `<div class="h-3 bg-high rounded-full overflow-hidden flex"><div class="bg-primary/60" style="width:${used}%"></div><div class="bg-primary" style="width:${Math.min(100 - used, d.qty)}%"></div></div><div class="text-xs text-sub">Taking ${d.qty} meals brings tonight to ${used + d.qty} of 100.</div>` : '<div class="text-xs text-sub">Dry goods storage has room. No time pressure on this one.</div>'}</section>
+    <section class="space-y-2"><h3 class="font-bold px-1">How will it reach you?</h3>${opts.map(([k, t, s, i, tag]) => `<button type="button" onclick="A.method('${k}')" aria-pressed="${m === k}" class="w-full text-left ${card} flex items-start gap-3 transition ${m === k ? 'ring-2 ring-primary' : 'opacity-90'}"><div class="w-5 h-5 mt-0.5 rounded-full shrink-0 flex items-center justify-center ${m === k ? 'bg-primary text-onprimary' : 'bg-high'}">${m === k ? ic('check', 'text-[14px]') : ''}</div><div class="min-w-0"><div class="font-bold flex items-center gap-2 flex-wrap">${ic(i, 'text-primary text-[20px]')}${t}${tag ? `<span class="text-[10px] px-1.5 py-0.5 rounded-full bg-pfix text-onpfix font-extrabold">${tag}</span>` : ''}</div><div class="text-xs text-sub mt-1">${s}</div></div></button>`).join('')}</section>
+  </div>`;
+};
+V.active = () => {
+  const mine = S.donations.filter(d => d.ngo === 'Asha Shelter').sort((a, b) => b.claimedAt - a.claimedAt), open = mine.filter(d => d.status !== 'received'), done = mine.filter(d => d.status === 'received');
+  const row = d => {
+    let act = '';
+    if (d.status === 'claimed' && d.method === 'collect') act = btn('Mark as picked up', `A.picked('${d.id}')`);
+    else if (d.status === 'claimed' && d.method === 'volunteer') act = `<div class="bg-low rounded-xl p-3 text-sm text-sub flex items-center gap-2">${ic('hourglass_top', 'text-primary')}Volunteers nearby have been pinged. Waiting for one to accept.</div>${btn('Open the volunteer view to accept', "A.setRole('volunteer')", 's')}`;
+    else if ((d.status === 'claimed' && d.method === 'drop') || d.status === 'pickup') act = `${d.status === 'pickup' && d.vol ? `<div class="text-sm text-sub flex items-center gap-2">${ic('two_wheeler', 'text-primary')}${d.vol} is on the way</div>` : ''}${proofBox(d.id)}${btn(`${ic('verified', 'text-[20px]')}Confirm received`, `A.receive('${d.id}')`)}`;
+    return `<article class="${card} space-y-3"><div class="flex items-start justify-between gap-2"><div class="min-w-0"><div class="font-bold">${esc(d.title)}</div><div class="text-xs text-sub mt-0.5">From ${esc(d.donor)} · ${{volunteer:'volunteer pickup', collect:'you collect', drop:'donor drops off'}[d.method]}</div></div>${pill(d.status)}</div>${act}</article>`;
+  };
+  return `<div class="space-y-4"><div><h1 class="text-[22px] font-extrabold tracking-tight">Active pickups</h1><p class="text-sm text-sub">Claims that still need to reach the shelter.</p></div>
+    ${open.length ? open.map(row).join('') : empty('task_alt', 'Nothing in progress', 'Claim something from the feed and it shows up here with the next step.', `<div class="pt-2">${btn('Go to the feed', "A.tab('feed')")}</div>`)}
+    ${done.length ? `<h3 class="font-bold px-1 pt-2">Completed</h3>${done.map(d => `<div class="${card} flex items-center gap-3"><div class="w-10 h-10 rounded-full bg-primary text-onprimary flex items-center justify-center shrink-0">${ic('check')}</div><div class="min-w-0 flex-1"><div class="font-bold truncate">${esc(d.title)}</div><div class="text-xs text-sub">From ${esc(d.donor)} · ${tm(d.receivedAt)}</div></div>${d.proof ? `<img alt="Proof" src="${d.proof}" class="w-12 h-12 rounded-lg object-cover">` : ''}</div>`).join('')}` : ''}</div>`;
+};
+V.needs = () => {
+  const N = S.needs;
+  return `<div class="space-y-4"><div><h1 class="text-[22px] font-extrabold tracking-tight">What we need</h1><p class="text-sm text-sub">Changes apply instantly: they filter your feed and show up on every donor's radar.</p></div>
+    <section class="${card} space-y-3"><h3 class="font-bold">Categories we accept</h3><div class="flex flex-wrap gap-2">${Object.entries(CATS).map(([k, c]) => chip(N.accepts[k], c.label, `A.accept('${k}')`, c.icon)).join('')}</div></section>
+    <section class="${card} space-y-3"><div class="flex items-center justify-between"><h3 class="font-bold">Cooked meals needed</h3>${N.accepts.food ? '' : '<span class="text-[11px] font-bold text-sub">Turned off</span>'}</div>
+      ${stepper('m', N.meals, 'meals tonight', 'A.meals(-5)', 'A.meals(5)')}
+      <div class="flex flex-wrap gap-2">${[25, 50, 100].map(n => chip(N.meals === n, n + (n === 100 ? '+' : '') + ' portions', `A.setMeals(${n})`)).join('')}</div>
+      <div><span class="lbl">Diet</span><div class="flex flex-wrap gap-2">${['Pure veg', 'Veg + Halal', 'Any safe food'].map(v => chip(N.diet === v, v, `A.diet('${v}')`)).join('')}</div></div>
+      <div class="grid grid-cols-2 gap-1 bg-high p-1 rounded-xl">${[[true, 'Urgent (next 4 h)', 'alarm'], [false, 'Ongoing weekly', 'calendar_month']].map(([v, l, i]) => `<button type="button" onclick="A.urgent(${v})" aria-pressed="${N.urgent === v}" class="py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 ${N.urgent === v ? 'bg-ter text-onter shadow-sm' : 'text-sub'}">${ic(i, 'text-[16px]')}${l}</button>`).join('')}</div></section>
+    <section class="${card} space-y-3"><div class="flex items-center justify-between"><h3 class="font-bold">School shoe sizes</h3><span class="text-[11px] font-bold text-sub">${N.sizes.length} selected</span></div><div class="flex flex-wrap gap-2">${[4, 5, 6, 7, 8, 9, 10].map(n => chip(N.sizes.includes(n), 'Size ' + n, `A.size(${n})`)).join('')}</div></section>
+    <section class="space-y-2"><h3 class="font-bold px-1">How donors see you</h3><div class="${card} space-y-3 border-primary/30"><div class="flex items-center justify-between"><div class="flex items-center gap-2"><div class="w-8 h-8 rounded-full bg-primary text-onprimary flex items-center justify-center text-xs font-bold">AS</div><div class="font-bold text-sm flex items-center gap-1">Asha Shelter${ic('verified', 'text-primary text-[16px]', true)}</div></div>${N.urgent && N.accepts.food ? '<span class="text-[10px] px-2 py-1 rounded-full bg-ter text-onter font-extrabold">Urgent tonight</span>' : ''}</div>
+      <div class="bg-low rounded-xl p-3 text-sm space-y-1.5">${N.accepts.food ? `<div class="flex items-center gap-2 font-bold">${ic('restaurant', 'text-primary text-[18px]')}Needs ${N.meals}+ cooked meals · ${N.diet}</div>` : ''}${N.accepts.shoes && N.sizes.length ? `<div class="flex items-center gap-2 text-sub">${ic('footprint', 'text-sec text-[18px]')}School shoes, sizes ${N.sizes.join(', ')}</div>` : ''}${!N.accepts.food && !(N.accepts.shoes && N.sizes.length) ? '<div class="text-sub">Nothing requested right now.</div>' : ''}</div></div></section>
+    ${btn(`${ic('publish', 'text-[20px]')}Publish needs`, "A.publishNeeds()")}</div>`;
+};
+
+/* ---- shared ---- */
+V.impact = () => {
+  const I = S.impact, max = Math.max(...I.week), today = (new Date().getDay() + 6) % 7, co2 = (I.hot * 1.0 / 1000).toFixed(2);
+  return `<div class="space-y-4"><div><h1 class="text-[22px] font-extrabold tracking-tight">Community impact</h1><p class="text-sm text-sub">Updates live as handovers are confirmed.</p></div>
+    <section class="${card} flex items-center justify-between"><div><div class="text-[38px] leading-none font-extrabold tracking-tight">${I.given.toLocaleString()}</div><div class="font-bold mt-1">Items and meals given</div></div><div class="w-12 h-12 rounded-full bg-pfix text-primary flex items-center justify-center">${ic('volunteer_activism', 'text-[26px]', true)}</div></section>
+    <div class="grid grid-cols-2 gap-3"><div class="${card}"><div class="text-[28px] leading-none font-extrabold">${I.hot.toLocaleString()}</div><div class="font-bold text-sm mt-1">Hot meals rescued</div></div><div class="${card}"><div class="text-[28px] leading-none font-extrabold">${I.ngos}</div><div class="font-bold text-sm mt-1">Partner NGOs</div></div>
+      <div class="${card}"><div class="text-[28px] leading-none font-extrabold">22 min</div><div class="font-bold text-sm mt-1">Avg time to pickup</div></div><div class="${card}"><div class="text-[28px] leading-none font-extrabold">${co2} t</div><div class="font-bold text-sm mt-1">CO₂e avoided (est.)</div></div></div>
+    <section class="${card} space-y-3"><div class="flex items-center justify-between"><h3 class="font-bold">This week</h3><span class="text-xs font-bold text-primary">${I.week.reduce((a, b) => a + b, 0).toLocaleString()} total</span></div>
+      <div class="h-40 flex items-end gap-2">${I.week.map((v, i) => `<div class="flex-1 h-full flex flex-col justify-end items-center gap-1"><span class="text-[10px] font-bold text-sub">${v}</span><div class="w-full rounded-t-lg ${i === today ? 'bg-primary' : 'bg-primary/30'}" style="height:${Math.max(4, v / max * 78)}%"></div><span class="text-[11px] font-bold ${i === today ? 'text-primary' : 'text-sub'}">${DAYS[i]}</span></div>`).join('')}</div></section>
+    <p class="text-[11px] text-sub px-1">Prototype data is seeded for the demo. CO₂e assumes about 0.4 kg of food per meal at about 2.5 kg CO₂e per kg. Replace with a cited factor before presenting it as fact.</p>
+    <button type="button" onclick="A.reset()" class="w-full text-center text-sm font-bold text-sub py-2">Reset demo data</button></div>`;
+};
+
+/* ---- volunteer (beta) ---- */
+function score(n) {
+  const p = S.vol, sk = n.skills.filter(x => p.skills.has(x)), ca = n.causes.filter(x => p.causes.has(x)), av = n.avail.filter(x => p.avail.has(x));
+  const s = 35*sk.length/n.skills.length + 30*ca.length/n.causes.length + 25*av.length/n.avail.length + 10*Math.max(0, 1 - n.km/p.radius);
+  return {n, pct:Math.min(99, Math.round(s)), sk, ca, av};
+}
+V.profile = () => {
+  const p = S.vol, cnt = NGOS.filter(n => n.km <= p.radius).length;
+  const cell = (r, d) => { const on = p.avail.has(r + '-' + d); return `<button type="button" aria-label="${r ? 'Evening' : 'Morning'} ${DAYS[d]}" aria-pressed="${on}" onclick="A.cell(${r},${d})" class="h-11 rounded-lg flex items-center justify-center transition ${on ? 'bg-primary text-onprimary' : 'bg-low text-line hover:bg-mid'}">${on ? ic('check', 'text-[18px]') : ic('add', 'text-[16px] opacity-30')}</button>`; };
+  return `<div class="space-y-4">
+    <section class="${card} flex items-center gap-3"><div class="w-14 h-14 rounded-full bg-pfix text-primary flex items-center justify-center text-xl font-extrabold">RK</div><div class="flex-1"><div class="flex items-center gap-2"><h1 class="text-[20px] font-extrabold">Ravi K.</h1><span class="text-[10px] px-1.5 py-0.5 rounded-full bg-sfix text-onsfix font-extrabold">Beta</span></div><p class="text-xs text-sub">Demo volunteer · 14 missions completed</p></div></section>
+    <section class="${card} space-y-3"><h3 class="font-bold flex items-center gap-2">${ic('near_me', 'text-primary')}Where you can help</h3><div class="bg-low rounded-xl px-3 py-3 flex items-center gap-2 font-semibold text-sm">${ic('location_on', 'text-line')}Andheri West, Mumbai</div>
+      <div class="flex items-center justify-between"><span class="text-sm font-bold">Max distance</span><span class="text-sm font-extrabold text-primary">${p.radius} km</span></div>
+      <div class="grid grid-cols-3 gap-1 bg-high p-1 rounded-xl">${[3, 5, 10].map(r => `<button type="button" onclick="A.radius(${r})" aria-pressed="${p.radius === r}" class="py-2 rounded-lg text-sm font-bold ${p.radius === r ? 'bg-card text-primary shadow-sm' : 'text-sub'}">${r} km</button>`).join('')}</div></section>
+    <section class="${card} space-y-3"><div class="flex items-center justify-between"><h3 class="font-bold flex items-center gap-2">${ic('handyman', 'text-primary')}Skills and equipment</h3><span class="text-[11px] font-bold text-primary">${p.skills.size} selected</span></div><div class="flex flex-wrap gap-2">${Object.entries(SKILLS).map(([k, [l, i]]) => chip(p.skills.has(k), l, `A.chip('skills','${k}')`, i)).join('')}</div></section>
+    <section class="${card} space-y-3"><div class="flex items-center justify-between"><h3 class="font-bold flex items-center gap-2">${ic('volunteer_activism', 'text-primary')}Causes you care about</h3><span class="text-[11px] font-bold text-primary">${p.causes.size} selected</span></div><div class="flex flex-wrap gap-2">${Object.entries(CAUSES).map(([k, [l, i]]) => chip(p.causes.has(k), l, `A.chip('causes','${k}')`, i)).join('')}</div></section>
+    <section class="${card} space-y-3"><div class="flex items-center justify-between"><h3 class="font-bold flex items-center gap-2">${ic('calendar_month', 'text-primary')}Weekly availability</h3><button type="button" onclick="A.weekends()" class="text-xs font-bold text-primary bg-pfix px-2.5 py-1 rounded-lg">Weekends only</button></div>
+      <div class="grid grid-cols-8 gap-1.5 items-center"><div class="col-span-1"></div>${DAYS.map((d, i) => `<div class="text-center text-[11px] font-bold ${i > 4 ? 'text-primary' : 'text-sub'}">${d}</div>`).join('')}
+      <div class="text-[11px] font-bold text-sub">AM</div>${DAYS.map((_, d) => cell(0, d)).join('')}<div class="text-[11px] font-bold text-sub">PM</div>${DAYS.map((_, d) => cell(1, d)).join('')}</div></section>
+    ${btn(`See ${cnt} NGOs within ${p.radius} km${ic('arrow_forward', 'text-[20px]')}`, "A.tab('matches')")}</div>`;
+};
+V.matches = () => {
+  const list = NGOS.filter(n => n.km <= S.vol.radius).map(score).sort((a, b) => S.sort === 'match' ? b.pct - a.pct : a.n.km - b.n.km);
+  return `<div class="space-y-4"><div><h1 class="text-[22px] font-extrabold tracking-tight">Matched NGOs</h1><p class="text-sm text-sub">Ranked by skills, causes, availability and distance. Beta scoring.</p></div>
+    <div class="flex items-center gap-2"><span class="text-xs font-bold text-sub">Sort</span>${[['match', 'Best match', 'recommend'], ['dist', 'Nearest', 'near_me']].map(([k, l, i]) => chip(S.sort === k, l, `A.sort('${k}')`, i)).join('')}</div>
+    ${list.length ? list.map(({n, pct, sk, ca, av}) => `<article class="${card} space-y-3"><div class="flex items-start justify-between gap-3"><div class="flex items-center gap-3 min-w-0"><div class="w-12 h-12 rounded-xl bg-pfix text-primary flex items-center justify-center shrink-0">${ic(n.icon, 'text-[26px]')}</div><div class="min-w-0"><div class="font-bold flex items-center gap-1 truncate">${n.name}${ic('verified', 'text-primary text-[16px]', true)}</div><div class="text-xs text-sub">${n.km} km · ${n.area}</div></div></div>${matchRing(pct)}</div>
+      <p class="text-sm text-sub">${n.kind}</p>
+      <div class="bg-low rounded-xl p-2.5 space-y-1.5"><div class="text-[11px] font-bold text-primary">Why this match</div><div class="flex flex-wrap gap-1.5">${sk.map(k => `<span class="text-[11px] font-bold px-2 py-1 rounded-full bg-pfix text-onpfix">${SKILLS[k][0]}</span>`).join('')}${ca.map(k => `<span class="text-[11px] font-bold px-2 py-1 rounded-full bg-pfix text-onpfix">${CAUSES[k][0]}</span>`).join('')}${av.length ? `<span class="text-[11px] font-bold px-2 py-1 rounded-full bg-card">${av.length} of ${n.avail.length} shifts fit</span>` : ''}<span class="text-[11px] font-bold px-2 py-1 rounded-full bg-card">${n.km} km</span>${!sk.length && !ca.length ? '<span class="text-[11px] text-sub">Few overlaps yet. Add skills in your profile.</span>' : ''}</div></div>
+      ${btn(S.offers[n.id] ? `${ic('check_circle', 'text-[20px]')}Offer sent · view details` : `View details and offer help${ic('arrow_forward', 'text-[20px]')}`, `A.openNgo('${n.id}')`, S.offers[n.id] ? 's' : 'p')}</article>`).join('') : empty('travel_explore', `No NGOs within ${S.vol.radius} km`, 'Widen your distance in the profile to see more.', `<div class="pt-2">${btn('Edit profile', "A.tab('profile')")}</div>`)}</div>`;
+};
+V.ngod = () => {
+  const n = NGO(S.p.id), sid = S.slotSel[n.id] || n.slots[0].id, on = S.offers[n.id];
+  return `<div class="space-y-4">${backRow('NGO details', '<span class="text-[10px] px-2 py-1 rounded-full bg-sfix text-onsfix font-extrabold">Volunteer beta</span>')}
+    <section class="${card} space-y-3"><div class="flex items-center gap-3"><div class="w-14 h-14 rounded-xl bg-primary text-onprimary flex items-center justify-center">${ic(n.icon, 'text-[30px]', true)}</div><div class="min-w-0"><h1 class="text-[20px] font-extrabold leading-6 flex items-center gap-1">${n.name}${ic('verified', 'text-primary text-[18px]', true)}</h1><div class="text-xs text-sub">${n.km} km · ${n.area}</div></div></div><p class="text-sm text-sub">${n.about}</p>
+      <div class="grid grid-cols-3 gap-2">${n.stats.map(([a, b]) => `<div class="bg-low rounded-xl p-2.5 text-center"><div class="font-extrabold text-primary text-[17px]">${a}</div><div class="text-[10px] font-semibold text-sub leading-tight mt-0.5">${b}</div></div>`).join('')}</div>
+      <p class="text-[11px] text-sub">Sample data for the prototype. Real NGOs would be verified before listing.</p>
+      ${n.child ? `<div class="flex items-start gap-2 bg-sfix text-onsfix rounded-xl p-3 text-xs font-medium">${ic('shield', 'text-[18px]')}Roles around children need ID checks and NGO supervision. Not built yet: flagged for the pilot.</div>` : ''}</section>
+    <section class="space-y-2"><h3 class="font-bold px-1">Pick a shift</h3>${n.slots.map(s => `<button type="button" onclick="A.slot('${n.id}','${s.id}')" aria-pressed="${sid === s.id}" class="w-full text-left ${card} flex items-center justify-between gap-3 transition ${sid === s.id ? 'ring-2 ring-primary' : ''}"><div class="min-w-0"><div class="font-bold text-sm flex items-center gap-2 flex-wrap">${s.label}${s.urgent ? '<span class="text-[10px] px-1.5 py-0.5 rounded-full bg-tfix text-ontfix font-extrabold">Urgent</span>' : ''}</div><div class="text-xs text-sub mt-0.5">${s.role} · ${s.need} volunteer${s.need > 1 ? 's' : ''} needed</div></div><div class="w-6 h-6 rounded-full shrink-0 flex items-center justify-center ${sid === s.id ? 'bg-primary text-onprimary' : 'bg-high text-transparent'}">${ic('check', 'text-[16px]')}</div></button>`).join('')}</section>
+    ${on ? `<section class="bg-pfix text-onpfix rounded-2xl p-4 flex items-start gap-3">${ic('celebration', 'text-[26px]', true)}<div><div class="font-extrabold">Offer sent</div><p class="text-sm mt-0.5">${n.name} sees your profile and the shift you picked. You will get a confirmation once a coordinator accepts.</p></div></section>` : ''}</div>`;
+};
+V.dispatch = () => {
+  const pings = S.donations.filter(d => d.status === 'claimed' && d.method === 'volunteer' && !S.declined.has(d.id)), runs = S.donations.filter(d => d.status === 'pickup' && d.vol === 'Ravi K.');
+  const route = d => `<div class="bg-low rounded-xl p-3 space-y-2 text-sm"><div class="flex items-center gap-2">${ic('trip_origin', 'text-primary text-[18px]')}<span><b>Pick up</b> · ${esc(d.donor)}, ${d.area}</span></div><div class="ml-[9px] h-3 border-l-2 border-dashed border-line/40"></div><div class="flex items-center gap-2">${ic('location_on', 'text-ter text-[18px]')}<span><b>Drop</b> · Asha Shelter, Andheri East</span></div></div>`;
+  return `<div class="space-y-4"><div><h1 class="text-[22px] font-extrabold tracking-tight">Dispatch</h1><p class="text-sm text-sub">Pickups NGOs have asked a volunteer to handle.</p></div>
+    ${runs.map(d => `<article class="${card} space-y-3 border-primary/40"><div class="flex items-center justify-between"><span class="text-[11px] font-bold px-2 py-1 rounded-full bg-primary text-onprimary">Your active run</span>${d.cat === 'food' ? `<span class="text-xs font-bold">${ic('timer', 'text-[16px] align-middle')} <span class="cd" data-until="${d.safeUntil}"></span> left</span>` : ''}</div><div class="font-extrabold text-[18px]">${esc(d.title)}</div>${route(d)}${proofBox(d.id)}${btn(`${ic('task_alt', 'text-[20px]')}Delivered to the shelter`, `A.receive('${d.id}')`)}</article>`).join('')}
+    ${pings.map(d => `<article class="${card} space-y-3 ring-1 ring-primary/40"><div class="flex items-center justify-between"><span class="flex items-center gap-2 text-sm font-bold text-primary"><span class="relative flex h-2.5 w-2.5"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-60"></span><span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-primary"></span></span>New dispatch</span>${d.cat === 'food' ? ring(d.safeUntil, FOODS[d.ftype]*HR, 44) : ''}</div>
+      <div class="flex items-baseline gap-2"><span class="text-[34px] leading-none font-extrabold text-primary">${d.qty}</span><span class="font-bold">${d.unit} · ${d.km} km · about ${Math.round(d.km*7+10)} min</span></div>${route(d)}
+      <div class="grid grid-cols-3 gap-2"><button type="button" onclick="A.decline('${d.id}')" class="h-[52px] rounded-xl bg-low font-bold text-sm">Decline</button><button type="button" onclick="A.accept2('${d.id}')" class="col-span-2 h-[52px] rounded-xl bg-primary text-onprimary font-bold text-[15px] shadow-md active:scale-[.98]">Accept dispatch</button></div></article>`).join('')}
+    ${!runs.length && !pings.length ? empty('two_wheeler', 'No dispatches right now', 'When an NGO claims food and picks volunteer pickup, it pings you here. Try it: switch to Donor, post food, then claim it as the NGO.', `<div class="pt-2">${btn('Browse matched NGOs', "A.tab('matches')", 's')}</div>`) : ''}</div>`;
+};
+
+/* ============ actions ============ */
+const A = {};
+const HOME = {donor:'give', ngo:'feed', volunteer:'dispatch'};
+function toast(msg) { const el = $('#toast'); el.querySelector('.msg').textContent = msg; el.classList.remove('opacity-0', 'translate-y-4'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.add('opacity-0', 'translate-y-4'), 3200); }
+function render() { renderHeader(); $('#screen').innerHTML = V[S.screen](); renderBar(); tick(); }
+A.go = (screen, p = {}, push = true) => { if (push) S.hist.push({screen:S.screen, p:S.p}); S.screen = screen; S.p = p; render(); window.scrollTo(0, 0); };
+A.back = () => { const h = S.hist.pop(); if (h) { S.screen = h.screen; S.p = h.p; } else { S.screen = HOME[S.role]; S.p = {}; } S.claimEnd = 0; render(); window.scrollTo(0, 0); };
+A.tab = k => { S.hist = []; S.claimEnd = 0; A.go(k, {}, false); };
+A.setRole = r => { S.role = r; S.hist = []; S.claimEnd = 0; A.go(HOME[r], {}, false); };
+A.persona = k => { S.persona = k; render(); };
+A.open = id => A.go('dtl', {id});
+/* donor form */
+A.openForm = cat => {
+  const food = cat === 'food';
+  S.form = {cat, ftype:'Biryani & rice', qty:food ? 20 : (cat === 'shoes' ? 2 : 5), cookedAt:Math.floor((now() - 30*MIN) / MIN) * MIN, cond:'Good', pickup:'By Sunday', desc:'', photo:null};
+  A.go('form');
+};
+A.qty = d => { const f = S.form; f.qty = Math.max(1, f.qty + d); $('#q').textContent = f.qty; };
+A.set = (k, v) => { S.form[k] = v; render(); };
+A.desc = v => { S.form.desc = v; };
+A.ftype = v => { S.form.ftype = v; updateForm(); };
+A.cooked = v => { if (!v) return; S.form.cookedAt = timeToMs(v); updateForm(); };
+A.photo = input => { const file = input.files && input.files[0]; if (!file) return; const r = new FileReader(); r.onload = () => { S.form.photo = r.result; render(); }; r.readAsDataURL(file); };
+function updateForm() { const b = $('#safeBox'); if (b) b.innerHTML = safeInner(S.form); renderBar(); tick(); }
+A.post = () => {
+  const f = S.form, P = DONORS[S.persona], c = CATS[f.cat], food = f.cat === 'food';
+  if (food && f.cookedAt + FOODS[f.ftype]*HR <= now()) { toast('This food is past its safe window'); return; }
+  const title = food ? `${f.qty} ${f.ftype.toLowerCase()} meals` : f.cat === 'shoes' ? `${f.qty} pair${f.qty > 1 ? 's' : ''} of shoes` : `${f.qty} ${c.label.toLowerCase()}`;
+  const d = {id:'d' + (S.nextId++), cat:f.cat, donor:P.name, area:P.area, km:food ? 1.8 : 2.4, qty:f.qty, unit:c.unit, title, desc:f.desc || (food ? 'Packed and ready for handover.' : 'Ready for pickup.'), status:'posted', created:now(), photo:f.photo};
+  if (food) Object.assign(d, {ftype:f.ftype, cookedAt:f.cookedAt, safeUntil:f.cookedAt + FOODS[f.ftype]*HR}); else Object.assign(d, {cond:f.cond, pickup:f.pickup});
+  S.donations.unshift(d); S.form = null; S.hist = [];
+  toast(`Posted. ${NGOS.filter(n => accepts(n, f.cat)).length} NGOs that accept ${c.label.toLowerCase()} were notified.`);
+  S.screen = 'dtl'; S.p = {id:d.id}; render(); window.scrollTo(0, 0);
+};
+/* NGO */
+A.feedTab = k => { S.feedTab = k; render(); };
+A.openClaim = id => { const d = find(id); if (!d || d.status !== 'posted') { toast('Already claimed by another NGO'); render(); return; } S.claimEnd = d.cat === 'food' ? now() + 10*MIN : 0; A.go('claim', {id, method:d.cat === 'food' ? 'volunteer' : 'collect'}); };
+A.method = m => { S.p.method = m; render(); };
+A.confirmClaim = () => {
+  const d = find(S.p.id);
+  if (!d || d.status !== 'posted') { toast('Already claimed by another NGO'); A.back(); return; }
+  d.status = 'claimed'; d.ngo = 'Asha Shelter'; d.method = S.p.method; d.claimedAt = now(); S.claimEnd = 0; S.hist = [];
+  toast(d.method === 'volunteer' ? 'Claimed. Nearby volunteers were pinged.' : 'Claimed. Pickup is on you now.');
+  S.screen = 'active'; S.p = {}; render(); window.scrollTo(0, 0);
+};
+A.release = auto => { S.claimEnd = 0; toast(auto === true ? 'Reservation expired. Released to the next NGO.' : 'Released to the next NGO.'); A.back(); };
+A.picked = id => { const d = find(id); d.status = 'pickup'; d.pickedAt = now(); toast('Marked as picked up.'); render(); };
+A.proof = (id, input) => { const file = input.files && input.files[0]; if (!file) return; const r = new FileReader(); r.onload = () => { S.proof[id] = r.result; render(); }; r.readAsDataURL(file); };
+A.receive = id => {
+  const d = find(id); if (!d || d.status === 'received') return;
+  d.status = 'received'; d.receivedAt = now(); d.proof = S.proof[id] || null;
+  S.impact.given += d.qty; if (d.cat === 'food') S.impact.hot += d.qty; S.impact.week[(new Date().getDay() + 6) % 7] += d.qty;
+  toast(`Handover confirmed. ${d.qty} ${d.unit} added to the impact counter.`); render();
+};
+A.accept = k => { S.needs.accepts[k] = !S.needs.accepts[k]; render(); };
+A.meals = d => { S.needs.meals = Math.max(0, S.needs.meals + d); render(); };
+A.setMeals = v => { S.needs.meals = v; render(); };
+A.diet = v => { S.needs.diet = v; render(); };
+A.urgent = v => { S.needs.urgent = v; render(); };
+A.size = n => { const a = S.needs.sizes, i = a.indexOf(n); if (i >= 0) a.splice(i, 1); else { a.push(n); a.sort((x, y) => x - y); } render(); };
+A.publishNeeds = () => { toast('Needs published. Donors see them on their radar now.'); };
+/* volunteer */
+A.chip = (kind, k) => { const s = S.vol[kind]; s.has(k) ? s.delete(k) : s.add(k); render(); };
+A.cell = (r, d) => { const s = S.vol.avail, k = r + '-' + d; s.has(k) ? s.delete(k) : s.add(k); render(); };
+A.weekends = () => { S.vol.avail = new Set(['0-5', '0-6', '1-5', '1-6']); render(); };
+A.radius = r => { S.vol.radius = r; render(); };
+A.sort = k => { S.sort = k; render(); };
+A.openNgo = id => A.go('ngod', {id});
+A.slot = (nid, sid) => { S.slotSel[nid] = sid; render(); };
+A.offer = nid => { if (S.offers[nid]) { delete S.offers[nid]; toast('Offer withdrawn.'); } else { S.offers[nid] = S.slotSel[nid] || NGO(nid).slots[0].id; toast('Offer sent to ' + NGO(nid).name + '.'); } render(); };
+A.accept2 = id => { const d = find(id); if (!d || d.status !== 'claimed') { toast('Someone else already took this dispatch'); render(); return; } d.status = 'pickup'; d.vol = 'Ravi K.'; d.pickedAt = now(); toast('Accepted. Head to the pickup point.'); render(); };
+A.decline = id => { S.declined.add(id); toast('Declined. We will ping the next volunteer.'); render(); };
+A.reset = () => { init(); toast('Demo reset.'); render(); window.scrollTo(0, 0); };
+
+/* ============ live ticker ============ */
+function tick() {
+  const t = now();
+  document.querySelectorAll('.rg').forEach(el => {
+    const rem = +el.dataset.until - t, tot = +el.dataset.total, arc = el.querySelector('.arc'), x = el.querySelector('.rgt');
+    arc.setAttribute('stroke-dasharray', Math.max(0, Math.min(100, rem/tot*100)) + ' 100');
+    arc.setAttribute('class', 'arc ' + (rem < 15*MIN ? 'stroke-ter' : rem < 60*MIN ? 'stroke-sec' : 'stroke-primary'));
+    x.textContent = fmtShort(rem);
+    x.className = 'rgt absolute inset-0 flex items-center justify-center text-[10px] font-extrabold ' + (rem < 15*MIN ? 'text-ter' : '');
+  });
+  document.querySelectorAll('.cd').forEach(el => { el.textContent = fmtCd(+el.dataset.until - t); });
+  if (S.screen === 'claim' && S.claimEnd) {
+    const l = S.claimEnd - t;
+    if (l <= 0) { A.release(true); return; }
+    document.querySelectorAll('.ct').forEach(e => { e.textContent = pad(Math.floor(l/60000)) + ':' + pad(Math.floor(l % 60000 / 1000)); });
+  }
+}
+
+init(); render();
+setInterval(tick, 1000);
+setInterval(() => { if (S.screen === 'feed' || S.screen === 'dispatch') render(); }, 30000);
+</script>
+</body>
+</html>

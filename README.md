@@ -1,4 +1,4 @@
-# ma-NGO
+# MA-NGO
 
 **From your surplus to someone's essential.**
 

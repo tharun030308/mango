@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>PassItOn: from your surplus to someone's essential</title>
+<title>ma-NGO: from your surplus to someone's essential</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -176,7 +176,7 @@ function renderHeader() {
     <span class="text-primary flex items-center shrink-0">See impact${ic('chevron_right', 'text-[14px]')}</span></button>
   <div class="px-4 pt-2.5 pb-2 flex items-center gap-2.5">
     <div class="w-9 h-9 rounded-xl bg-primary text-onprimary flex items-center justify-center">${ic('volunteer_activism', 'text-[20px]', true)}</div>
-    <div class="leading-tight"><div class="font-extrabold text-[17px] tracking-tight">PassItOn</div><div class="text-[11px] font-semibold text-sub">From your surplus to someone's essential</div></div>
+    <div class="leading-tight"><div class="font-extrabold text-[17px] tracking-tight">ma-</div><div class="text-[11px] font-semibold text-sub">From your surplus to someone's essential</div></div>
   </div>
   <div class="px-4 pb-2.5"><div class="grid grid-cols-3 bg-high p-1 rounded-full">${roles.map(([k, l]) => `<button type="button" onclick="A.setRole('${k}')" aria-pressed="${S.role === k}" class="py-1.5 rounded-full text-xs font-bold flex items-center justify-center gap-1 transition ${S.role === k ? 'bg-card text-primary shadow-sm' : 'text-sub'}">${l}${k === 'volunteer' ? '<span class="text-[9px] px-1 py-px rounded-full bg-sfix text-onsfix font-extrabold">BETA</span>' : ''}</button>`).join('')}</div></div>`;
 }
